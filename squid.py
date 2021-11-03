@@ -25,10 +25,11 @@ import random
 import re
 from zipfile import ZipFile
 import ipywidgets as widgets
-from IPython.display import FileLink
+from IPython.display import FileLink, display, HTML
 from squid_utils import (html2latex, get_img_filenames, get_filepaths,
     get_subdirs, destroy)
 from squid_qti import (qti_text, ET_file_upload_question, ET_MCQ, SaveToQtiFile)
+from textwrap import dedent
 
 # Basic question types:
 
@@ -88,25 +89,37 @@ class Question_Written(Question_Base):
         self.solution_text = solution_text
         self.marks = marks
         self.variant_number = variant_number
-        self.rubric = r"""
-    \noindent{\bf Marking Scheme:}
-    \begin{small}
-    \begin{itemize}
-    \item 1 mark: The student demonstrates a partial understanding of how to do the problem.
-    \item 2 marks: The student demonstrates a good understanding of how to do the problem \\ (some minor errors permitted).
-    \item 3 marks: The student demonstrates a good understanding and obtains the correct answer.
-    \end{itemize}
-    \end{small}"""
+        self.rubric = dedent(
+        r"""\noindent{\bf Marking Scheme:}
+            \begin{small}
+            \begin{itemize}
+            \item 1 mark: The student demonstrates a partial understanding of how to do the problem.
+            \item 2 marks: The student demonstrates a good understanding of how to do the problem \\ (some minor errors permitted).
+            \item 3 marks: The student demonstrates a good understanding and obtains the correct answer.
+            \end{itemize}
+            \end{small}""")
 
-    def q_text(self): # these can be rewritten when defining new questions
-        self.update_variant_number()
-        return self.question_text
+    def q_text(self, show_variant_number=True, variant_number=0, show_marks=False): # these can be rewritten when defining new questions
+        if variant_number != 0:
+            self.variant_number = variant_number
+        s = dedent(self.question_text)
+        if show_marks:
+            s = f'[{self.marks} marks]  ' + s
+        if show_variant_number:
+            s = s + f'<br>[For office use only: V{self.variant_number}]'
+        return s
+
+    # def preview(self):
+    #     return display(HTML(self.q_text()+'<br><b>Solution.</b><br>'+self.solution_text))
+    #
+    # def show_solution(self):
+    #     return display(HTML(self.solution_text))
 
     def update_variant_number(self, variant_number=None):
         '''Change the variant number, update question text accordingly'''
         if variant_number != None:
             self.variant_number = variant_number
-        self.question_text = self.question_text_basic + "<br>[For office use only: V" + str(self.variant_number)+"]"
+        # self.question_text = self.question_text_basic + "<br>[For office use only: V" + str(self.variant_number)+"]"
 
     def qti(self, variant_number=None, points=3, title=None):
         '''Return and ElementTree element representing this question, ready for inserting into a QTI assessment.
@@ -133,19 +146,43 @@ class Question_Written(Question_Base):
         '''
         f.write(self.make_BB_row())
 
-    def latex_solution_page(self,var_number=-1):
+    def latex_solution_page(self, var_number=None):
         '''Returns a page for the marking scheme; var_number is an optional variant number '''
-        if var_number==-1:
-            var_number=self.variant_number  # i can be changed post-hoc in case variant_number wasn't initially supplied
-        s = "\\newpage\n\\section{Variant "+str(var_number)+"}\n\\label{v"+str(var_number)+"}\n\n"+\
-        self.latex_question_text()+"\n\\medskip\n\n"+r"\noindent{\bf Solution.}"+"\n\n"+self.sol_text()+"\n\\medskip\n\n"+self.rubric
-        return(s)
+        if var_number==None:
+            var_number = self.variant_number  # i can be changed post-hoc in case variant_number wasn't initially supplied
+        return dedent(fr'''
+        \newpage
+        \section{{Variant {var_number}}}
+        \label{{v{var_number}}}
+
+        {self.latex_question_text()}
+        \medskip
+
+        \noindent{{\bf Solution.}}
+
+        {self.sol_text()}
+        \medskip
+
+        {self.rubric}'''
+        )
+        #
+        #
+        # s = "\\newpage\n\\section{Variant "+str(var_number)+"}\n\\label{v"+str(var_number)+"}\n\n"+\
+        # self.latex_question_text()+"\n\\medskip\n\n"+r"\noindent{\bf Solution.}"+"\n\n"+self.sol_text()+"\n\\medskip\n\n"+self.rubric
+        # return(s)
 
     def test_solution_page(self,filename="test.tex",var_number=-1):
         '''Writes the solution page to a ready-to-compile LaTex file for testing'''
         with open(filename,'w') as f:
             f.write(r"\documentclass{article}"+"\n"+r"\usepackage{amssymb,amsmath,hyperref,a4wide}"+"\n\n"+r"\begin{document}"+"\n"+\
             self.latex_solution_page(var_number=var_number)+"\n"+r"\end{document}")
+
+    def preview(self, show_variant_number=True, show_marks=True):
+        return display(HTML(self.q_text(show_variant_number=show_variant_number,
+               show_marks=show_marks)+'<br><br><b>Solution.</b><br>'+self.solution_text))
+
+    def _repr_html_(self):
+        return self.q_text()+'<br><br><b>Solution.</b><br>'+self.solution_text
 
 class Question_MCQ(Question_Base):
     """
@@ -448,14 +485,14 @@ def selection_wizard(L,
     Ideally, all questions should be of the same class.'''
     b = 0
     L_selected = []
-    items = [widgets.ToggleButton(description="variant "+str(i), button_style='') for i in range(len(L))]
+    items = [widgets.ToggleButton(description="variant "+str(i), button_style='', value=True) for i in range(len(L))]
     master = widgets.VBox([widgets.HBox(
         [items[i], widgets.HTMLMath(value="   :   ".join([a for a in L[i].table_row]))]) for i in range(len(L))])
     display(master)
     # widgets.Label(value=str([c.value for c in items]))
     out = widgets.Output(layout={'border': '1px solid black'}, description='Status:')
 
-    Button_Count = widgets.Button(description="Count: ")
+    Button_Count = widgets.Button(description="Count: "+str(len(items)))
     def Count(b):
         count=0
         for c in items:

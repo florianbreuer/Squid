@@ -483,7 +483,7 @@ def SaveToQtiFile(L,
                 images = images + get_img_filenames(wa)
 
     ident = 'g'+id_generator(size=30, chars='0123456789abcdef')  # the assessment identifier, also needed for filenames
-    T = initialise_qti(title=title, ident=ident, verbose=verbose)
+    T = initialise_qti(title=title, ident=ident, verbose=False)
     if make_variant_numbers:
         for k,Q in enumerate(L):
             Q.update_variant_number(k+1)
@@ -513,5 +513,7 @@ def SaveToQtiFile(L,
         for file in files:
             zipobj.write(file)
     os.chdir('..')
+    if verbose:
+        print(f'Created {zip_filename}.zip. You can upload it to canvas.')
     if clean_up:
         destroy(subdir)
